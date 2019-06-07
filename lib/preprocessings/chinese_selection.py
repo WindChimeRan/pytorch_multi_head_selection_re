@@ -2,9 +2,10 @@ import os
 import json
 import numpy as np
 
-from cached_property import cached_property
-
+from collections import Counter
 from typing import Dict, List, Tuple, Set, Optional
+
+from cached_property import cached_property
 
 
 class Chinese_selection_preprocessing(object):
@@ -44,7 +45,27 @@ class Chinese_selection_preprocessing(object):
                   open(self.relation_vocab_path, 'w'),
                   ensure_ascii=False)
 
-    def read_line(self, line: str) -> Optional[str]:
+    def gen_vocab(self, min_freq: int):
+        source = os.path.join(self.raw_data_root, self.hyper.train)
+        target = os.path.join(self.data_root, 'word_vocab.json')
+
+        cnt = Counter()  # 8180 total
+        with open(source, 'r') as s:
+            for line in s:
+                line = line.strip("\n")
+                if not line:
+                    return None
+                instance = json.loads(line)
+                text = list(instance['text'])
+                cnt.update(text)
+        result = {}
+        for i, (k, v) in enumerate(cnt.items()):
+            if v > min_freq:
+                result[k] = i
+        result['oov'] = i + 1
+        json.dump(result, open(target, 'w'), ensure_ascii=False)
+
+    def _read_line(self, line: str) -> Optional[str]:
         line = line.strip("\n")
         if not line:
             return None
@@ -57,7 +78,7 @@ class Chinese_selection_preprocessing(object):
         if 'spo_list' in instance:
             spo_list = instance['spo_list']
 
-            if not self.check_valid(text, spo_list):
+            if not self._check_valid(text, spo_list):
                 return None
             spo_list = [{
                 'predicate': spo['predicate'],
@@ -79,21 +100,21 @@ class Chinese_selection_preprocessing(object):
         }
         return json.dumps(result, ensure_ascii=False)
 
-    def gen_one_data(self, dataset):
+    def _gen_one_data(self, dataset):
         source = os.path.join(self.raw_data_root, dataset)
         target = os.path.join(self.data_root, dataset)
         with open(source, 'r') as s, open(target, 'w') as t:
             for line in s:
-                newline = self.read_line(line)
+                newline = self._read_line(line)
                 if newline is not None:
                     t.write(newline)
                     t.write('\n')
 
     def gen_all_data(self):
-        self.gen_one_data(self.hyper.train)
-        self.gen_one_data(self.hyper.dev)
+        self._gen_one_data(self.hyper.train)
+        self._gen_one_data(self.hyper.dev)
 
-    def check_valid(self, text: str, spo_list: List[Dict[str, str]]) -> bool:
+    def _check_valid(self, text: str, spo_list: List[Dict[str, str]]) -> bool:
         if spo_list == []:
             return False
         if len(text) > self.hyper.max_text_len:
