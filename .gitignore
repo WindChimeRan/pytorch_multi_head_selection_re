@@ -1,5 +1,4 @@
-*/__pycache__
-/raw_data
+**/__pycache__
+raw_data
 /data
 */.*
-!raw_data/chinese/relation_vocab.json
