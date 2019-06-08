@@ -6,9 +6,15 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data import Dataset
 
+from torch.nn.utils.rnn import pad_sequence
 
-class Selection_loader(Dataset):
+from functools import partial
+from typing import Dict, List, Tuple, Set, Optional
+
+
+class Selection_Dataset(Dataset):
     def __init__(self, hyper, dataset):
+        self.hyper = hyper
         self.data_root = hyper.data_root
 
         self.word_vocab = json.load(
@@ -38,36 +44,64 @@ class Selection_loader(Dataset):
         bio = self.bio_list[index]
         spo = self.spo_list[index]
 
-        tokens = self.text2tensor(text)
-        bio = self.bio2tensor(bio)
-        selection = self.selection2tensor(selection)
+        tokens_id = self.text2tensor(text)
+        bio_id = self.bio2tensor(bio)
+        selection_id = self.selection2tensor(text, selection)
 
-        return text, bio, selection, spo
+        return tokens_id, bio_id, selection_id, len(text), spo, text, bio
 
     def __len__(self):
         return len(self.text_list)
 
-    def text2tensor(self):
-        pass
+    def text2tensor(self, text: List[str]) -> torch.tensor:
+        return torch.tensor(list(map(lambda x: self.word_vocab[x], text)))
 
-    def bio2tensor(self):
-        pass
+    def bio2tensor(self, bio):
+        return torch.tensor(list(map(lambda x: self.bio_vocab[x], bio)))
 
-    def selection2tensor(self):
-        pass
+    def selection2tensor(self, text, selection):
+        # s p o
+        result = torch.zeros(
+            (self.hyper.max_text_len, len(self.relation_vocab),
+             self.hyper.max_text_len))
+        NA = self.relation_vocab['N']
+        result[:, NA, :] = 1
+        for triplet in selection:
+
+            object = triplet['object']
+            subject = triplet['subject']
+            predicate = triplet['predicate']
+
+            result[subject, predicate, object] = 1
+            result[subject, NA, object] = 0
+
+        return result
 
 
 class Batch_reader(object):
     def __init__(self, data):
         transposed_data = list(zip(*data))
-        self.inp = torch.stack(transposed_data[0], 0)
-        self.tgt = torch.stack(transposed_data[1], 0)
+        # tokens_id, bio_id, selection_id, spo, text, bio
+
+        self.tokens_id = pad_sequence(transposed_data[0], batch_first=True)
+        self.bio_id = pad_sequence(transposed_data[1], batch_first=True)
+        self.selection_id = torch.stack(transposed_data[2], 0)
+
+        self.length = transposed_data[3]
+
+        self.spo_gold = transposed_data[4]
+        self.text = transposed_data[5]
+        self.bio = transposed_data[6]
 
     def pin_memory(self):
-        self.inp = self.inp.pin_memory()
-        self.tgt = self.tgt.pin_memory()
+        self.tokens_id = self.tokens_id.pin_memory()
+        self.bio_id = self.bio_id.pin_memory()
+        self.selection_id = self.selection_id.pin_memory()
         return self
 
 
 def collate_fn(batch):
     return Batch_reader(batch)
+
+
+Selection_loader = partial(DataLoader, collate_fn=collate_fn, pin_memory=True)
