@@ -6,8 +6,10 @@ import os
 
 from typing import Dict, List, Tuple, Set, Optional
 
+from torchcrf import CRF
 
-class MultiHeadSelection(nn.Model):
+
+class MultiHeadSelection(nn.Module):
     def __init__(self, hyper) -> None:
         self.hyper = hyper
         self.data_root = hyper.data_root
@@ -21,19 +23,43 @@ class MultiHeadSelection(nn.Model):
 
         self.word_embeddings = nn.Embedding(num_embeddings=len(
             self.relation_vocab),
-                                            embedding_dim=50)
+                                            embedding_dim=hyper.emb_size)
 
-        self.encoder = encoder
-        self.tagger = tagger(vocab=vocab,
-                             encoder=self.encoder,
-                             text_field_embedder=self.word_embeddings)
         self.relation_emb = nn.Embedding(num_embeddings=len(
             self.relation_vocab),
-                                         embedding_dim=50)
+                                         embedding_dim=hyper.rel_emb_size)
+        # bio + pad
+        self.bio_emb = nn.Embedding(num_embeddings=len(self.bio_vocab),
+                                    embedding_dim=hyper.rel_emb_size)
 
-        self.selection_u = nn.Linear(hyper.hidden_dim, 50)
-        self.selection_v = nn.Linear(hyper.hidden_dim, 50)
-        self.selection_uv = nn.Linear(100, 50)
+        if hyper.cell_name == 'gru':
+            self.encoder = nn.GRU(hyper.emb_size,
+                                  hyper.hidden_size,
+                                  bidirectional=True,
+                                  batch_first=True)
+        elif hyper.cell_name == 'lstm':
+            self.encoder = nn.LSTM(hyper.emb_size,
+                                   hyper.emb_size.hidden_size,
+                                   bidirectional=True,
+                                   batch_first=True)
+        else:
+            raise ValueError('cell name should be gru/lstm!')
+
+        if hyper.activation == 'relu':
+            self.activation = nn.ReLU()
+        elif hyper.activation == 'tanh':
+            self.activation = nn.Tanh()
+        else:
+            raise ValueError('unexpected activation!')
+
+        self.tagger = CRF(len(self.bio_vocab) - 1, batch_first=True)
+
+        self.selection_u = nn.Linear(hyper.hidden_dim, hyper.rel_emb_size)
+        self.selection_v = nn.Linear(hyper.hidden_dim, hyper.rel_emb_size)
+        self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
+                                      hyper.rel_emb_size)
+        # remove <pad>
+        self.emission = nn.Linear(hyper.hidden_dim, len(self.bio_vocab) - 1)
 
         self.selection_loss = nn.BCEWithLogitsLoss()
 
@@ -50,34 +76,35 @@ class MultiHeadSelection(nn.Model):
 
         return output
 
-    def forward(
-            self,  # type: ignore
-            tokens: Dict[str, torch.LongTensor],
-            tags: torch.LongTensor = None,
-            selection: torch.FloatTensor = None,
-            spo_list: Optional[List[Dict[str, str]]] = None,
-            # pylint: disable=unused-argument
-            **kwargs) -> Dict[str, torch.Tensor]:
-        # pylint: disable=arguments-differ
+    def forward(self, sample) -> Dict[str, torch.Tensor]:
 
-        mask = get_text_field_mask(tokens)
-        encoded_text = self.encoder(self.word_embeddings(tokens), mask)
+        # mask = get_text_field_mask(tokens)
+        tokens = sample.tokens_id
+        selection_gold = sample.selection_id
+        bio_gold = sample.bio_id
+        length = sample.length
+
+        mask = tokens != self.word_vocab['<pad>']
+
+        embedded = self.embedding(tokens)
+
+        o, h = self.rnn(embedded)
+
+        o = (lambda a: sum(a) / 2)(torch.split(o, self.hidden_size, dim=2))
+
+        emi = self.emission(o)
 
         output = {}
 
-        if tags is not None:
-            span_dict = self.tagger(tokens, tags)
-            span_loss = span_dict['loss']
-        else:
-            span_dict = self.tagger(tokens)
-            span_loss = 0
+        if bio_gold is not None:
+            crf_loss = self.tagger(emi, bio_gold, mask=mask)
 
         # forward multi head selection
-        u = torch.tanh(self.selection_u(encoded_text)).unsqueeze(1)
-        v = torch.tanh(self.selection_v(encoded_text)).unsqueeze(2)
+        u = self.activation(self.selection_u(o)).unsqueeze(1)
+        v = self.activation(self.selection_v(o)).unsqueeze(2)
         u = u + torch.zeros_like(v)
         v = v + torch.zeros_like(u)
-        uv = torch.tanh(self.selection_uv(torch.cat((u, v), dim=-1)))
+        uv = self.activation(self.selection_uv(torch.cat((u, v), dim=-1)))
         selection_logits = torch.einsum('bijh,rh->birj', uv,
                                         self.relation_emb.weight)
 

@@ -54,10 +54,14 @@ class Selection_Dataset(Dataset):
         return len(self.text_list)
 
     def text2tensor(self, text: List[str]) -> torch.tensor:
-        return torch.tensor(list(map(lambda x: self.word_vocab[x], text)))
+        padded_list = list(map(lambda x: self.word_vocab[x], text))
+        padded_list.extend([self.word_vocab['<pad>']] * (self.hyper.max_text_len - len(text)))
+        return torch.tensor(padded_list)
 
     def bio2tensor(self, bio):
-        return torch.tensor(list(map(lambda x: self.bio_vocab[x], bio)))
+        padded_list = list(map(lambda x: self.bio_vocab[x], bio))
+        padded_list.extend([self.bio_vocab['<pad>']] * (self.hyper.max_text_len - len(bio)))
+        return torch.tensor(padded_list)
 
     def selection2tensor(self, text, selection):
         # s p o

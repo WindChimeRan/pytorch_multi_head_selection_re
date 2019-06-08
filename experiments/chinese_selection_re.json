@@ -6,5 +6,10 @@
     "train": "train_data.json",
     "dev": "dev_data.json",
     "relation_vocab": "relation_vocab.json",
-    "max_text_len": 100
+    "max_text_len": 100,
+    "cell_name": "lstm",
+    "emb_size": 300,
+    "rel_emb_size": 50,
+    "hidden_size": 300,
+    "activation": "relu"
 }

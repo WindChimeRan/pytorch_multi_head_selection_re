@@ -33,7 +33,7 @@ class Chinese_selection_preprocessing(object):
         return json.load(open(self.relation_vocab_path, 'r'))
 
     def gen_bio_vocab(self):
-        result = {'B': 0, 'I': 1, 'O': 2}
+        result = {'<pad>': 3, 'B': 0, 'I': 1, 'O': 2}
         json.dump(result, open(os.path.join(self.data_root, 'bio_vocab.json'), 'w'))
 
     def gen_relation_vocab(self):
@@ -62,8 +62,8 @@ class Chinese_selection_preprocessing(object):
                 instance = json.loads(line)
                 text = list(instance['text'])
                 cnt.update(text)
-        result = {}
-        for i, (k, v) in enumerate(cnt.items()):
+        result = {'<pad>': 0}
+        for i, (k, v) in enumerate(cnt.items(), 1):
             if v > min_freq:
                 result[k] = i
         result['oov'] = i + 1
