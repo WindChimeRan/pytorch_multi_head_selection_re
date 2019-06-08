@@ -11,6 +11,8 @@ from torchcrf import CRF
 
 class MultiHeadSelection(nn.Module):
     def __init__(self, hyper) -> None:
+        super(MultiHeadSelection, self).__init__()
+
         self.hyper = hyper
         self.data_root = hyper.data_root
 
@@ -39,7 +41,7 @@ class MultiHeadSelection(nn.Module):
                                   batch_first=True)
         elif hyper.cell_name == 'lstm':
             self.encoder = nn.LSTM(hyper.emb_size,
-                                   hyper.emb_size.hidden_size,
+                                   hyper.hidden_size,
                                    bidirectional=True,
                                    batch_first=True)
         else:
@@ -54,12 +56,12 @@ class MultiHeadSelection(nn.Module):
 
         self.tagger = CRF(len(self.bio_vocab) - 1, batch_first=True)
 
-        self.selection_u = nn.Linear(hyper.hidden_dim, hyper.rel_emb_size)
-        self.selection_v = nn.Linear(hyper.hidden_dim, hyper.rel_emb_size)
+        self.selection_u = nn.Linear(hyper.hidden_size, hyper.rel_emb_size)
+        self.selection_v = nn.Linear(hyper.hidden_size, hyper.rel_emb_size)
         self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
                                       hyper.rel_emb_size)
         # remove <pad>
-        self.emission = nn.Linear(hyper.hidden_dim, len(self.bio_vocab) - 1)
+        self.emission = nn.Linear(hyper.hidden_size, len(self.bio_vocab) - 1)
 
         self.selection_loss = nn.BCEWithLogitsLoss()
 
@@ -86,7 +88,7 @@ class MultiHeadSelection(nn.Module):
 
         mask = tokens != self.word_vocab['<pad>']
 
-        embedded = self.embedding(tokens)
+        embedded = self.word_embeddings(tokens)
 
         o, h = self.rnn(embedded)
 
@@ -96,6 +98,7 @@ class MultiHeadSelection(nn.Module):
 
         output = {}
 
+        crf_loss = 0
         if bio_gold is not None:
             crf_loss = self.tagger(emi, bio_gold, mask=mask)
 
@@ -109,14 +112,13 @@ class MultiHeadSelection(nn.Module):
                                         self.relation_emb.weight)
 
         # if inference
-        output = self.inference(tokens, span_dict, selection_logits, output)
-        self.accuracy(output['selection_triplets'], spo_list)
-
-        selection_dict = {}
-        if selection is not None:
-            selection_loss = self.selection_loss(selection_logits, selection)
-            selection_dict['loss'] = selection_loss
-            output['loss'] = span_loss + selection_loss
+        # output = self.inference(tokens, span_dict, selection_logits, output)
+        # self.accuracy(output['selection_triplets'], spo_list)
+        selection_loss = 0
+        if selection_gold is not None:
+            selection_loss = self.selection_loss(selection_logits, selection_gold)
+        
+        output['loss'] = crf_loss + selection_loss
 
         return output
 
