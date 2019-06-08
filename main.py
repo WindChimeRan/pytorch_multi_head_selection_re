@@ -14,6 +14,7 @@ class Runner(object):
         self.preprocessor.gen_relation_vocab()
         self.preprocessor.gen_all_data()
         self.preprocessor.gen_vocab(min_freq=1)
+        self.preprocessor.gen_bio_vocab()
 
     def run(self):
         print(self.hyper.__dict__)
