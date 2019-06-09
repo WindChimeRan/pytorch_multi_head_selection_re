@@ -11,6 +11,7 @@
     "emb_size": 300,
     "rel_emb_size": 50,
     "hidden_size": 300,
+    "threshold": 0.5,
     "activation": "tanh",
     "optimizer": "adam",
     "epoch_num":10,

@@ -1,10 +1,13 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import json
 import os
+import copy
 
 from typing import Dict, List, Tuple, Set, Optional
+from functools import partial
 
 from torchcrf import CRF
 
@@ -57,44 +60,59 @@ class MultiHeadSelection(nn.Module):
 
         self.tagger = CRF(len(self.bio_vocab) - 1, batch_first=True)
 
-        self.selection_u = nn.Linear(hyper.hidden_size + hyper.rel_emb_size, hyper.rel_emb_size)
-        self.selection_v = nn.Linear(hyper.hidden_size + hyper.rel_emb_size, hyper.rel_emb_size)
+        self.selection_u = nn.Linear(hyper.hidden_size + hyper.rel_emb_size,
+                                     hyper.rel_emb_size)
+        self.selection_v = nn.Linear(hyper.hidden_size + hyper.rel_emb_size,
+                                     hyper.rel_emb_size)
         self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
                                       hyper.rel_emb_size)
         # remove <pad>
         self.emission = nn.Linear(hyper.hidden_size, len(self.bio_vocab) - 1)
 
-        self.selection_loss = nn.BCEWithLogitsLoss()
-
         # self.accuracy = F1Selection()
 
-    def inference(self, tokens, span_dict, selection_logits, output):
-        # span_dict = self.tagger.decode(span_dict)
-        # output['span_tags'] = span_dict['tags']
-
-        selection_tags = torch.sigmoid(
-            selection_logits) > self.config.binary_threshold
+    def inference(self, mask, text_list, decoded_tag, selection_logits,
+                  output):
+        selection_mask = (mask.unsqueeze(2) *
+                          mask.unsqueeze(1)).unsqueeze(2).expand(
+                              -1, -1, len(self.relation_vocab),
+                              -1)  # batch x seq x rel x seq
+        selection_tags = (torch.sigmoid(selection_logits) *
+                          selection_mask.float()) > self.hyper.threshold
         output['selection_triplets'] = self.selection_decode(
-            tokens, span_dict['tags'], selection_tags)
+            text_list, decoded_tag, selection_tags)
 
         return output
 
-    def forward(self, sample, inference: bool) -> Dict[str, torch.Tensor]:
+    def masked_BCEloss(self, mask, selection_logits, selection_gold):
+        selection_mask = (mask.unsqueeze(2) *
+                          mask.unsqueeze(1)).unsqueeze(2).expand(
+                              -1, -1, len(self.relation_vocab),
+                              -1)  # batch x seq x rel x seq
+        selection_loss = F.binary_cross_entropy_with_logits(selection_logits,
+                                                            selection_gold,
+                                                            reduction='none')
+        selection_loss = selection_loss.masked_select(selection_mask).sum()
+        selection_loss /= mask.sum()
+        return selection_loss
+
+    @staticmethod
+    def description(epoch, epoch_num, output):
+        return "L: {:.2f}, L_crf: {:.2f}, L_selection: {:.2f}, epoch: {}/{}:".format(
+            output['loss'].item(), output['crf_loss'].item(),
+            output['selection_loss'].item(), epoch, epoch_num)
+
+    def forward(self, sample, is_train: bool) -> Dict[str, torch.Tensor]:
 
         tokens = sample.tokens_id.cuda(self.gpu)
         selection_gold = sample.selection_id.cuda(self.gpu)
         bio_gold = sample.bio_id.cuda(self.gpu)
-        # tokens = sample.tokens_id
-        # selection_gold = sample.selection_id
-        # bio_gold = sample.bio_id
-        length = sample.length
 
-        mask = tokens != self.word_vocab['<pad>']
-        try:
-            embedded = self.word_embeddings(tokens)
-        except:
-            print(tokens)
-            exit()
+        text_list = sample.text
+
+        mask = tokens != self.word_vocab['<pad>']  # batch x seq
+
+        embedded = self.word_embeddings(tokens)
         o, h = self.encoder(embedded)
 
         o = (lambda a: sum(a) / 2)(torch.split(o,
@@ -107,18 +125,19 @@ class MultiHeadSelection(nn.Module):
 
         crf_loss = 0
 
-        if not inference:
-            crf_loss = self.tagger(emi, bio_gold, mask=mask)
+        if is_train:
+            crf_loss = -self.tagger(emi, bio_gold, mask=mask, reduction='mean')
         else:
             decoded_tag = self.tagger.decode(emissions=emi, mask=mask)
-            for line in decoded_tag:
-                line.extend([self.bio_vocab['<pad>']] * (self.hyper.max_text_len - len(line)))
-            bio_gold = torch.tensor(decoded_tag)
+            temp_tag = copy.deepcopy(decoded_tag)
+            for line in temp_tag:
+                line.extend([self.bio_vocab['<pad>']] *
+                            (self.hyper.max_text_len - len(line)))
+            bio_gold = torch.tensor(temp_tag).cuda(self.gpu)
 
         tag_emb = self.bio_emb(bio_gold)
 
         o = torch.cat((o, tag_emb), dim=2)
-
 
         # forward multi head selection
         u = self.activation(self.selection_u(o)).unsqueeze(1)
@@ -129,33 +148,47 @@ class MultiHeadSelection(nn.Module):
         selection_logits = torch.einsum('bijh,rh->birj', uv,
                                         self.relation_emb.weight)
 
-        # if inference
+        if not is_train:
+            output = self.inference(mask, text_list, decoded_tag,
+                                    selection_logits, output)
         # output = self.inference(tokens, span_dict, selection_logits, output)
         # self.accuracy(output['selection_triplets'], spo_list)
         selection_loss = 0
-        if not inference:
-            selection_loss = self.selection_loss(selection_logits,
+        if is_train:
+            selection_loss = self.masked_BCEloss(mask, selection_logits,
                                                  selection_gold)
 
-        output['loss'] = crf_loss + selection_loss
+        loss = crf_loss + selection_loss
+        output['crf_loss'] = crf_loss
+        output['selection_loss'] = selection_loss
+        output['loss'] = loss
 
+        output['description'] = partial(self.description, output=output)
         return output
 
-    def selection_decode(self, tokens, sequence_tags,
+    def selection_decode(self, text_list, sequence_tags,
                          selection_tags: torch.Tensor
                          ) -> List[List[Dict[str, str]]]:
         # selection_tags[0, 0, 1, 1] = 1
         # temp
 
-        text = [[
-            self.vocab.get_token_from_index(token, namespace='tokens')
-            for token in instance_token
-        ] for instance_token in tokens['tokens'].tolist()]
+        reversed_relation_vocab = {
+            v: k
+            for k, v in self.relation_vocab.items()
+        }
+
+        reversed_bio_vocab = {v: k for k, v in self.bio_vocab.items()}
+
+        text_list = list(map(list, text_list))
+        # sequence_tags = list(map(lambda x: reversed_bio_vocab[x], sequence_tags))
+        print(sequence_tags)
 
         def find_entity(pos, text, sequence_tags):
             entity = []
 
             if len(sequence_tags) < len(text):
+                print('catch you!')
+                assert 1 == 2
                 return 'NA'
 
             if sequence_tags[pos] in ('B', 'O'):
@@ -177,11 +210,15 @@ class MultiHeadSelection(nn.Module):
         result = [[] for _ in range(batch_num)]
         idx = torch.nonzero(selection_tags.cpu())
         for i in range(idx.size(0)):
-            b, o, p, s = idx[i].tolist()
-            object = find_entity(o, text[b], sequence_tags[b])
-            subject = find_entity(s, text[b], sequence_tags[b])
-            predicate = self.config.relation_vocab_from_idx[p]
-            if object != 'NA' and subject != 'NA':
+            b, s, p, o = idx[i].tolist()
+            tags = list(map(lambda x: reversed_bio_vocab[x], sequence_tags[b]))
+            object = find_entity(o, text_list[b], tags)
+            subject = find_entity(s, text_list[b], tags)
+
+            assert object != '' and subject != ''
+
+            predicate = reversed_relation_vocab[p]
+            if object != 'NA' and subject != 'NA' and predicate != 'N':
                 triplet = {
                     'object': object,
                     'predicate': predicate,

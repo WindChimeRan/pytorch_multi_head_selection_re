@@ -23,10 +23,12 @@ class Runner(object):
         self.model = MultiHeadSelection(self.hyper).cuda(self.gpu)
         # self.model = MultiHeadSelection(self.hyper)
         self.optimizer = self._optimizer(self.hyper.optimizer, self.model)
-        
 
     def _optimizer(self, name, model):
-        m = {'adam': Adam(model.parameters()), 'sgd': SGD(model.parameters(), lr=0.5)}
+        m = {
+            'adam': Adam(model.parameters()),
+            'sgd': SGD(model.parameters(), lr=0.5)
+        }
         return m[name]
 
     def preprocessing(self):
@@ -39,7 +41,19 @@ class Runner(object):
     def run(self):
         # print(self.hyper.__dict__)
         # self.preprocessing()
-        self.train()
+        # self.train()
+        self.evaluation()
+
+    def evaluation(self):
+        dev_set = Selection_Dataset(self.hyper, self.hyper.dev)
+        loader = Selection_loader(dev_set, batch_size=2, pin_memory=True)
+        pbar = tqdm(enumerate(BackgroundGenerator(loader)), total=len(loader))
+
+        for batch_ndx, sample in pbar:
+            self.model.eval()
+            output = self.model(sample, is_train=False)
+        
+
 
     def train(self):
         train_set = Selection_Dataset(self.hyper, self.hyper.train)
@@ -53,13 +67,13 @@ class Runner(object):
                 self.model.train()
 
                 self.optimizer.zero_grad()
-                output = self.model(sample, inference=False)
+                output = self.model(sample, is_train=True)
                 loss = output['loss']
                 loss.backward()
                 self.optimizer.step()
 
-                pbar.set_description("loss: {:.2f}, epoch: {}/{}:".format(
-                    loss.item(), epoch, self.hyper.epoch_num))
+                pbar.set_description(output['description'](
+                    epoch, self.hyper.epoch_num))
 
 
 if __name__ == "__main__":
