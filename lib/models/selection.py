@@ -15,6 +15,7 @@ class MultiHeadSelection(nn.Module):
 
         self.hyper = hyper
         self.data_root = hyper.data_root
+        self.gpu = hyper.gpu
 
         self.word_vocab = json.load(
             open(os.path.join(self.data_root, 'word_vocab.json'), 'r'))
@@ -24,7 +25,7 @@ class MultiHeadSelection(nn.Module):
             open(os.path.join(self.data_root, 'bio_vocab.json'), 'r'))
 
         self.word_embeddings = nn.Embedding(num_embeddings=len(
-            self.relation_vocab),
+            self.word_vocab),
                                             embedding_dim=hyper.emb_size)
 
         self.relation_emb = nn.Embedding(num_embeddings=len(
@@ -47,17 +48,17 @@ class MultiHeadSelection(nn.Module):
         else:
             raise ValueError('cell name should be gru/lstm!')
 
-        if hyper.activation == 'relu':
+        if hyper.activation.lower() == 'relu':
             self.activation = nn.ReLU()
-        elif hyper.activation == 'tanh':
+        elif hyper.activation.lower() == 'tanh':
             self.activation = nn.Tanh()
         else:
             raise ValueError('unexpected activation!')
 
         self.tagger = CRF(len(self.bio_vocab) - 1, batch_first=True)
 
-        self.selection_u = nn.Linear(hyper.hidden_size, hyper.rel_emb_size)
-        self.selection_v = nn.Linear(hyper.hidden_size, hyper.rel_emb_size)
+        self.selection_u = nn.Linear(hyper.hidden_size + hyper.rel_emb_size, hyper.rel_emb_size)
+        self.selection_v = nn.Linear(hyper.hidden_size + hyper.rel_emb_size, hyper.rel_emb_size)
         self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
                                       hyper.rel_emb_size)
         # remove <pad>
@@ -68,8 +69,8 @@ class MultiHeadSelection(nn.Module):
         # self.accuracy = F1Selection()
 
     def inference(self, tokens, span_dict, selection_logits, output):
-        span_dict = self.tagger.decode(span_dict)
-        output['span_tags'] = span_dict['tags']
+        # span_dict = self.tagger.decode(span_dict)
+        # output['span_tags'] = span_dict['tags']
 
         selection_tags = torch.sigmoid(
             selection_logits) > self.config.binary_threshold
@@ -78,29 +79,46 @@ class MultiHeadSelection(nn.Module):
 
         return output
 
-    def forward(self, sample) -> Dict[str, torch.Tensor]:
+    def forward(self, sample, inference: bool) -> Dict[str, torch.Tensor]:
 
-        # mask = get_text_field_mask(tokens)
-        tokens = sample.tokens_id
-        selection_gold = sample.selection_id
-        bio_gold = sample.bio_id
+        tokens = sample.tokens_id.cuda(self.gpu)
+        selection_gold = sample.selection_id.cuda(self.gpu)
+        bio_gold = sample.bio_id.cuda(self.gpu)
+        # tokens = sample.tokens_id
+        # selection_gold = sample.selection_id
+        # bio_gold = sample.bio_id
         length = sample.length
 
         mask = tokens != self.word_vocab['<pad>']
+        try:
+            embedded = self.word_embeddings(tokens)
+        except:
+            print(tokens)
+            exit()
+        o, h = self.encoder(embedded)
 
-        embedded = self.word_embeddings(tokens)
-
-        o, h = self.rnn(embedded)
-
-        o = (lambda a: sum(a) / 2)(torch.split(o, self.hidden_size, dim=2))
+        o = (lambda a: sum(a) / 2)(torch.split(o,
+                                               self.hyper.hidden_size,
+                                               dim=2))
 
         emi = self.emission(o)
 
         output = {}
 
         crf_loss = 0
-        if bio_gold is not None:
+
+        if not inference:
             crf_loss = self.tagger(emi, bio_gold, mask=mask)
+        else:
+            decoded_tag = self.tagger.decode(emissions=emi, mask=mask)
+            for line in decoded_tag:
+                line.extend([self.bio_vocab['<pad>']] * (self.hyper.max_text_len - len(line)))
+            bio_gold = torch.tensor(decoded_tag)
+
+        tag_emb = self.bio_emb(bio_gold)
+
+        o = torch.cat((o, tag_emb), dim=2)
+
 
         # forward multi head selection
         u = self.activation(self.selection_u(o)).unsqueeze(1)
@@ -115,9 +133,10 @@ class MultiHeadSelection(nn.Module):
         # output = self.inference(tokens, span_dict, selection_logits, output)
         # self.accuracy(output['selection_triplets'], spo_list)
         selection_loss = 0
-        if selection_gold is not None:
-            selection_loss = self.selection_loss(selection_logits, selection_gold)
-        
+        if not inference:
+            selection_loss = self.selection_loss(selection_logits,
+                                                 selection_gold)
+
         output['loss'] = crf_loss + selection_loss
 
         return output

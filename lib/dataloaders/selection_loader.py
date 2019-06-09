@@ -54,13 +54,16 @@ class Selection_Dataset(Dataset):
         return len(self.text_list)
 
     def text2tensor(self, text: List[str]) -> torch.tensor:
-        padded_list = list(map(lambda x: self.word_vocab[x], text))
+        oov = self.word_vocab['oov']
+        padded_list = list(map(lambda x: self.word_vocab.get(x, oov), text))
         padded_list.extend([self.word_vocab['<pad>']] * (self.hyper.max_text_len - len(text)))
         return torch.tensor(padded_list)
 
     def bio2tensor(self, bio):
+        # here we pad bio with "O". Then, in our model, we will mask this "O" padding.
+        # in multi-head selection, we will use "<pad>" token embedding instead.
         padded_list = list(map(lambda x: self.bio_vocab[x], bio))
-        padded_list.extend([self.bio_vocab['<pad>']] * (self.hyper.max_text_len - len(bio)))
+        padded_list.extend([self.bio_vocab['O']] * (self.hyper.max_text_len - len(bio)))
         return torch.tensor(padded_list)
 
     def selection2tensor(self, text, selection):

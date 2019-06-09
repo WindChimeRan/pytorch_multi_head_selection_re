@@ -63,10 +63,12 @@ class Chinese_selection_preprocessing(object):
                 text = list(instance['text'])
                 cnt.update(text)
         result = {'<pad>': 0}
-        for i, (k, v) in enumerate(cnt.items(), 1):
+        i = 1
+        for k, v in cnt.items():
             if v > min_freq:
                 result[k] = i
-        result['oov'] = i + 1
+                i += 1
+        result['oov'] = i
         json.dump(result, open(target, 'w'), ensure_ascii=False)
 
     def _read_line(self, line: str) -> Optional[str]:

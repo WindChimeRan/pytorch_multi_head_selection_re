@@ -11,5 +11,8 @@
     "emb_size": 300,
     "rel_emb_size": 50,
     "hidden_size": 300,
-    "activation": "relu"
+    "activation": "tanh",
+    "optimizer": "adam",
+    "epoch_num":10,
+    "gpu":3
 }
