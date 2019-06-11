@@ -24,7 +24,7 @@ class Runner(object):
         self.model_dir = 'saved_models'
 
         # self.hyper = Hyper('experiments/chinese_selection_re.json')
-        self.hyper = Hyper(os.path.join('experiments', self.exp_name + '.json')
+        self.hyper = Hyper(os.path.join('experiments', self.exp_name + '.json'))
 
         self.gpu = self.hyper.gpu
         self.preprocessor = Chinese_selection_preprocessing(self.hyper)
