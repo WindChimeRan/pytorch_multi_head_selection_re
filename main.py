@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import argparse
 
 import torch
 
@@ -17,14 +18,27 @@ from lib.metrics import F1_triplet
 from lib.models import MultiHeadSelection
 from lib.config import Hyper
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--exp_name',
+                    '-e',
+                    type=str,
+                    default='chinese_selection_re',
+                    help='experiments/exp_name.json')
+parser.add_argument('--mode',
+                    '-m',
+                    type=str,
+                    default='preprocessing',
+                    help='preprocessing|train')
+args = parser.parse_args()
+
 
 class Runner(object):
-    def __init__(self):
-        self.exp_name = 'chinese_selection_re'
+    def __init__(self, exp_name: str):
+        self.exp_name = exp_name
         self.model_dir = 'saved_models'
 
-        # self.hyper = Hyper('experiments/chinese_selection_re.json')
-        self.hyper = Hyper(os.path.join('experiments', self.exp_name + '.json'))
+        self.hyper = Hyper(os.path.join('experiments',
+                                        self.exp_name + '.json'))
 
         self.gpu = self.hyper.gpu
         self.preprocessor = Chinese_selection_preprocessing(self.hyper)
@@ -47,23 +61,33 @@ class Runner(object):
         # for ner only
         self.preprocessor.gen_bio_vocab()
 
-    def run(self):
-        # print(self.hyper.__dict__)
-        # self.preprocessing()
-        self.train()
-        # self.evaluation()
+    def run(self, mode: str):
+        if mode == 'preprocessing':
+            self.preprocessing()
+        elif mode == 'train':
+            self.train()
+        elif mode == 'evaluation':
+            self.load_model(epoch=self.hyper.evaluation_epoch)
+            self.evaluation()
+        else:
+            raise ValueError('invalid mode')
 
-    def load_model(self, epoch):
-        self.model.load_state_dict(torch.load(os.path.join(self.model_dir, self.exp_name + '_' + epoch)))
+    def load_model(self, epoch: int):
+        self.model.load_state_dict(
+            torch.load(
+                os.path.join(self.model_dir,
+                             self.exp_name + '_' + str(epoch))))
 
-    def save_model(self, epoch):
+    def save_model(self, epoch: int):
         if not os.path.exists(self.model_dir):
             os.mkdir(self.model_dir)
-        torch.save(self.model.state_dict(), os.path.join(self.model_dir, self.exp_name + '_' + epoch))
+        torch.save(
+            self.model.state_dict(),
+            os.path.join(self.model_dir, self.exp_name + '_' + str(epoch)))
 
     def evaluation(self):
         dev_set = Selection_Dataset(self.hyper, self.hyper.dev)
-        loader = Selection_loader(dev_set, batch_size=40, pin_memory=True)
+        loader = Selection_loader(dev_set, batch_size=400, pin_memory=True)
         self.metrics.reset()
         self.model.eval()
 
@@ -102,10 +126,10 @@ class Runner(object):
 
             self.save_model(epoch)
 
-            if epoch % self.hyper.print_epoch == 0 and epoch != 0:
+            if epoch % self.hyper.print_epoch == 0 and epoch > 3:
                 self.evaluation()
 
 
 if __name__ == "__main__":
-    config = Runner()
-    config.run()
+    config = Runner(exp_name=args.exp_name)
+    config.run(mode=args.mode)
