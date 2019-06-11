@@ -34,7 +34,8 @@ class Chinese_selection_preprocessing(object):
 
     def gen_bio_vocab(self):
         result = {'<pad>': 3, 'B': 0, 'I': 1, 'O': 2}
-        json.dump(result, open(os.path.join(self.data_root, 'bio_vocab.json'), 'w'))
+        json.dump(result,
+                  open(os.path.join(self.data_root, 'bio_vocab.json'), 'w'))
 
     def gen_relation_vocab(self):
         relation_vocab = {}

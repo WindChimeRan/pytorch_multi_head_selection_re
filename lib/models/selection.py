@@ -71,18 +71,18 @@ class MultiHeadSelection(nn.Module):
 
         # self.accuracy = F1Selection()
 
-    def inference(self, mask, text_list, decoded_tag, selection_logits,
-                  output):
+    def inference(self, mask, text_list, decoded_tag, selection_logits):
         selection_mask = (mask.unsqueeze(2) *
                           mask.unsqueeze(1)).unsqueeze(2).expand(
                               -1, -1, len(self.relation_vocab),
                               -1)  # batch x seq x rel x seq
         selection_tags = (torch.sigmoid(selection_logits) *
                           selection_mask.float()) > self.hyper.threshold
-        output['selection_triplets'] = self.selection_decode(
-            text_list, decoded_tag, selection_tags)
-
-        return output
+        # output['selection_triplets'] = self.selection_decode(
+        #     text_list, decoded_tag, selection_tags)
+        selection_triplets = self.selection_decode(text_list, decoded_tag,
+                                                   selection_tags)
+        return selection_triplets
 
     def masked_BCEloss(self, mask, selection_logits, selection_gold):
         selection_mask = (mask.unsqueeze(2) *
@@ -109,6 +109,7 @@ class MultiHeadSelection(nn.Module):
         bio_gold = sample.bio_id.cuda(self.gpu)
 
         text_list = sample.text
+        spo_gold = sample.spo_gold
 
         mask = tokens != self.word_vocab['<pad>']  # batch x seq
 
@@ -149,10 +150,10 @@ class MultiHeadSelection(nn.Module):
                                         self.relation_emb.weight)
 
         if not is_train:
-            output = self.inference(mask, text_list, decoded_tag,
-                                    selection_logits, output)
-        # output = self.inference(tokens, span_dict, selection_logits, output)
-        # self.accuracy(output['selection_triplets'], spo_list)
+            output['selection_triplets'] = self.inference(
+                mask, text_list, decoded_tag, selection_logits)
+            output['spo_gold'] = spo_gold
+
         selection_loss = 0
         if is_train:
             selection_loss = self.masked_BCEloss(mask, selection_logits,
@@ -180,16 +181,14 @@ class MultiHeadSelection(nn.Module):
         reversed_bio_vocab = {v: k for k, v in self.bio_vocab.items()}
 
         text_list = list(map(list, text_list))
-        # sequence_tags = list(map(lambda x: reversed_bio_vocab[x], sequence_tags))
-        print(sequence_tags)
 
         def find_entity(pos, text, sequence_tags):
             entity = []
 
-            if len(sequence_tags) < len(text):
-                print('catch you!')
-                assert 1 == 2
-                return 'NA'
+            # if len(sequence_tags) < len(text):
+            #     print('catch you!')
+            #     assert 1 == 2
+            #     return 'NA'
 
             if sequence_tags[pos] in ('B', 'O'):
                 entity.append(text[pos])
@@ -218,7 +217,7 @@ class MultiHeadSelection(nn.Module):
             assert object != '' and subject != ''
 
             predicate = reversed_relation_vocab[p]
-            if object != 'NA' and subject != 'NA' and predicate != 'N':
+            if predicate != 'N':
                 triplet = {
                     'object': object,
                     'predicate': predicate,
