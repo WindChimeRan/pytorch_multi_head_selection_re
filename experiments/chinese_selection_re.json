@@ -17,5 +17,5 @@
     "activation": "tanh",
     "optimizer": "adam",
     "epoch_num":30,
-    "gpu":3
+    "gpu":1
 }

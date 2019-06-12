@@ -170,8 +170,6 @@ class MultiHeadSelection(nn.Module):
     def selection_decode(self, text_list, sequence_tags,
                          selection_tags: torch.Tensor
                          ) -> List[List[Dict[str, str]]]:
-        # selection_tags[0, 0, 1, 1] = 1
-        # temp
 
         reversed_relation_vocab = {
             v: k
@@ -184,11 +182,6 @@ class MultiHeadSelection(nn.Module):
 
         def find_entity(pos, text, sequence_tags):
             entity = []
-
-            # if len(sequence_tags) < len(text):
-            #     print('catch you!')
-            #     assert 1 == 2
-            #     return 'NA'
 
             if sequence_tags[pos] in ('B', 'O'):
                 entity.append(text[pos])
@@ -210,20 +203,22 @@ class MultiHeadSelection(nn.Module):
         idx = torch.nonzero(selection_tags.cpu())
         for i in range(idx.size(0)):
             b, s, p, o = idx[i].tolist()
+
+            predicate = reversed_relation_vocab[p]
+            if predicate != 'N':
+                continue
             tags = list(map(lambda x: reversed_bio_vocab[x], sequence_tags[b]))
             object = find_entity(o, text_list[b], tags)
             subject = find_entity(s, text_list[b], tags)
 
             assert object != '' and subject != ''
 
-            predicate = reversed_relation_vocab[p]
-            if predicate != 'N':
-                triplet = {
-                    'object': object,
-                    'predicate': predicate,
-                    'subject': subject
-                }
-                result[b].append(triplet)
+            triplet = {
+                'object': object,
+                'predicate': predicate,
+                'subject': subject
+            }
+            result[b].append(triplet)
         return result
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:

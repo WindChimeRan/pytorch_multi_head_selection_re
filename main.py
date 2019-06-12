@@ -42,10 +42,9 @@ class Runner(object):
 
         self.gpu = self.hyper.gpu
         self.preprocessor = Chinese_selection_preprocessing(self.hyper)
-        self.model = MultiHeadSelection(self.hyper).cuda(self.gpu)
-        # self.model = MultiHeadSelection(self.hyper)
-        self.optimizer = self._optimizer(self.hyper.optimizer, self.model)
         self.metrics = F1_triplet()
+        self.optimizer = None
+        self.model = None
 
     def _optimizer(self, name, model):
         m = {
@@ -53,6 +52,9 @@ class Runner(object):
             'sgd': SGD(model.parameters(), lr=0.5)
         }
         return m[name]
+
+    def _init_model(self):
+        self.model = MultiHeadSelection(self.hyper).cuda(self.gpu)
 
     def preprocessing(self):
         self.preprocessor.gen_relation_vocab()
@@ -65,8 +67,11 @@ class Runner(object):
         if mode == 'preprocessing':
             self.preprocessing()
         elif mode == 'train':
+            self._init_model()
+            self.optimizer = self._optimizer(self.hyper.optimizer, self.model)
             self.train()
         elif mode == 'evaluation':
+            self._init_model()
             self.load_model(epoch=self.hyper.evaluation_epoch)
             self.evaluation()
         else:
