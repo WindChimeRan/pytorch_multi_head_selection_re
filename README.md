@@ -11,7 +11,11 @@
 
 # Dataset
 
-* Chinese Information Extraction Competition [link](http://lic2019.ccf.org.cn/kg)
+## Chinese IE
+Chinese Information Extraction Competition [link](http://lic2019.ccf.org.cn/kg)
+
+**Unzip \*.json into ./raw_data/chinese/**
+
 
 # Result
 
@@ -31,3 +35,4 @@ Current status
 * No bert embedding
 * No word-char embedding
 
+Need more datasets and compared models.
