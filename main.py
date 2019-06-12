@@ -28,7 +28,7 @@ parser.add_argument('--mode',
                     '-m',
                     type=str,
                     default='preprocessing',
-                    help='preprocessing|train')
+                    help='preprocessing|train|evaluation')
 args = parser.parse_args()
 
 

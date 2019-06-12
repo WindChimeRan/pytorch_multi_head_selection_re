@@ -16,7 +16,13 @@ Chinese Information Extraction Competition [link](http://lic2019.ccf.org.cn/kg)
 
 **Unzip \*.json into ./raw_data/chinese/**
 
+# Run
+```shell
+python main.py --mode preprocessing
+python main.py --mode train
+python main.py --mode evaluation
 
+```
 # Result
 
 Training speed: 10min/epoch
