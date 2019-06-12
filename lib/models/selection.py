@@ -78,8 +78,7 @@ class MultiHeadSelection(nn.Module):
                               -1)  # batch x seq x rel x seq
         selection_tags = (torch.sigmoid(selection_logits) *
                           selection_mask.float()) > self.hyper.threshold
-        # output['selection_triplets'] = self.selection_decode(
-        #     text_list, decoded_tag, selection_tags)
+
         selection_triplets = self.selection_decode(text_list, decoded_tag,
                                                    selection_tags)
         return selection_triplets
@@ -205,7 +204,7 @@ class MultiHeadSelection(nn.Module):
             b, s, p, o = idx[i].tolist()
 
             predicate = reversed_relation_vocab[p]
-            if predicate != 'N':
+            if predicate == 'N':
                 continue
             tags = list(map(lambda x: reversed_bio_vocab[x], sequence_tags[b]))
             object = find_entity(o, text_list[b], tags)
@@ -222,4 +221,4 @@ class MultiHeadSelection(nn.Module):
         return result
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return self.accuracy.get_metric(reset)
+        pass
