@@ -16,11 +16,15 @@ Chinese Information Extraction Competition [link](http://lic2019.ccf.org.cn/kg)
 
 **Unzip \*.json into ./raw_data/chinese/**
 
+## CoNLL04
+
+On going
+
 # Run
 ```shell
-python main.py --mode preprocessing
-python main.py --mode train
-python main.py --mode evaluation
+python main.py --mode preprocessing --exp_name chinese_selection_re
+python main.py --mode train --exp_name chinese_selection_re 
+python main.py --mode evaluation --exp_name chinese_selection_re
 
 ```
 # Result
