@@ -1,5 +1,6 @@
 **/__pycache__
-raw_data
+raw_data/chinese
 data
 */.*
 saved_models
+.vscode

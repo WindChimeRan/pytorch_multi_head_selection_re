@@ -3,12 +3,6 @@ import json
 from collections import Counter
 from typing import Dict, List, Tuple, Set, Optional
 
-# TODO:
-# 1. ok gen_bio_vocab
-# 2. ok gen_relation_vocab
-# 3. gen_all_data
-# 4. _gen_one_data
-
 
 class Conll_selection_preprocessing(object):
     def __init__(self, hyper):
@@ -62,7 +56,6 @@ class Conll_selection_preprocessing(object):
             triplets = self._process_sent(sent, dic)
 
     def _gen_one_data(self, dataset):
-        # TODO
         sent = []
         bio = []
         dic = {}
@@ -105,7 +98,7 @@ class Conll_selection_preprocessing(object):
             if len(sent) <= self.hyper.max_text_len:
                 triplets = self._process_sent(sent, dic)
                 result = {'text': sent, 'spo_list': triplets,
-                        'bio': bio, 'selection': selection_dics}
+                          'bio': bio, 'selection': selection_dics}
                 t.write(json.dumps(result))
 
     def gen_all_data(self):
@@ -140,6 +133,7 @@ class Conll_selection_preprocessing(object):
         result['oov'] = i
         json.dump(result, open(target, 'w'), ensure_ascii=False)
 
+    # TODO: fix bug: entity with multiple tokens
     @staticmethod
     def _process_sent(sent: List[str], dic) -> Set[str]:
         result = []
