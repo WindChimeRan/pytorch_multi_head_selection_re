@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from torch.optim import Adam, SGD
 
-from lib.preprocessings import Chinese_selection_preprocessing
+from lib.preprocessings import Chinese_selection_preprocessing, Conll_selection_preprocessing
 from lib.dataloaders import Selection_Dataset, Selection_loader
 from lib.metrics import F1_triplet
 from lib.models import MultiHeadSelection
@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name',
                     '-e',
                     type=str,
-                    default='chinese_selection_re',
+                    default='conll_selection_re',
                     help='experiments/exp_name.json')
 parser.add_argument('--mode',
                     '-m',
@@ -41,7 +41,7 @@ class Runner(object):
                                         self.exp_name + '.json'))
 
         self.gpu = self.hyper.gpu
-        self.preprocessor = Chinese_selection_preprocessing(self.hyper)
+        self.preprocessor = None
         self.metrics = F1_triplet()
         self.optimizer = None
         self.model = None
@@ -57,6 +57,10 @@ class Runner(object):
         self.model = MultiHeadSelection(self.hyper).cuda(self.gpu)
 
     def preprocessing(self):
+        if self.exp_name == 'conll_selection_re':
+            self.preprocessor = Conll_selection_preprocessing(self.hyper)
+        elif self.exp_name == 'chinese_selection_re':
+            self.preprocessor = Chinese_selection_preprocessing(self.hyper)
         self.preprocessor.gen_relation_vocab()
         self.preprocessor.gen_all_data()
         self.preprocessor.gen_vocab(min_freq=1)

@@ -24,6 +24,7 @@ class Hyper(object):
         self.optimizer: str
         self.epoch_num: int
         self.gpu: int
+        self.bio_emb_size: int
 
         self.__dict__ = json.load(open(path, 'r'))
 

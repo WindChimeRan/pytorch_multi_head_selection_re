@@ -54,6 +54,7 @@ class Selection_Dataset(Dataset):
         return len(self.text_list)
 
     def text2tensor(self, text: List[str]) -> torch.tensor:
+        # TODO: tokenizer
         oov = self.word_vocab['oov']
         padded_list = list(map(lambda x: self.word_vocab.get(x, oov), text))
         padded_list.extend([self.word_vocab['<pad>']] * (self.hyper.max_text_len - len(text)))

@@ -36,7 +36,7 @@ class MultiHeadSelection(nn.Module):
                                          embedding_dim=hyper.rel_emb_size)
         # bio + pad
         self.bio_emb = nn.Embedding(num_embeddings=len(self.bio_vocab),
-                                    embedding_dim=hyper.rel_emb_size)
+                                    embedding_dim=hyper.bio_emb_size)
 
         if hyper.cell_name == 'gru':
             self.encoder = nn.GRU(hyper.emb_size,
@@ -60,13 +60,12 @@ class MultiHeadSelection(nn.Module):
 
         self.tagger = CRF(len(self.bio_vocab) - 1, batch_first=True)
 
-        self.selection_u = nn.Linear(hyper.hidden_size + hyper.rel_emb_size,
+        self.selection_u = nn.Linear(hyper.hidden_size + hyper.bio_emb_size,
                                      hyper.rel_emb_size)
-        self.selection_v = nn.Linear(hyper.hidden_size + hyper.rel_emb_size,
+        self.selection_v = nn.Linear(hyper.hidden_size + hyper.bio_emb_size,
                                      hyper.rel_emb_size)
         self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
                                       hyper.rel_emb_size)
-        # remove <pad>
         self.emission = nn.Linear(hyper.hidden_size, len(self.bio_vocab) - 1)
 
         # self.accuracy = F1Selection()
@@ -169,7 +168,7 @@ class MultiHeadSelection(nn.Module):
     def selection_decode(self, text_list, sequence_tags,
                          selection_tags: torch.Tensor
                          ) -> List[List[Dict[str, str]]]:
-
+        # TODO: tokenizer
         reversed_relation_vocab = {
             v: k
             for k, v in self.relation_vocab.items()
