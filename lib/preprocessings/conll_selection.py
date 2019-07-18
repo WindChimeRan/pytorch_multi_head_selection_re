@@ -35,7 +35,6 @@ class Conll_selection_preprocessing(object):
                 if line.startswith('#'):
                     if sent != []:
                         self.word_vocab.update(sent)
-                        triplets = self._process_sent(sent, dic)
                     sent = []
                     dic = {}
                 else:
@@ -53,7 +52,6 @@ class Conll_selection_preprocessing(object):
                         for r, h in zip(relation, head_list):
                             dic[word+'~'+r] = h
             self.word_vocab.update(sent)
-            triplets = self._process_sent(sent, dic)
 
     def _gen_one_data(self, dataset):
         sent = []
@@ -67,7 +65,7 @@ class Conll_selection_preprocessing(object):
             for line in s:
                 if line.startswith('#'):
                     if sent != []:
-                        triplets = self._process_sent(sent, dic)
+                        triplets = self._process_sent(sent, selection_dics, bio)
                         result = {'text': sent, 'spo_list': triplets,
                                   'bio': bio, 'selection': selection_dics}
                         if len(sent) <= self.hyper.max_text_len:
@@ -96,7 +94,7 @@ class Conll_selection_preprocessing(object):
                             selection_dics.append(
                                 {'subject': int(num), 'predicate': self.relation_vocab_dict[r], 'object': h})
             if len(sent) <= self.hyper.max_text_len:
-                triplets = self._process_sent(sent, dic)
+                triplets = self._process_sent(sent, selection_dics, bio)
                 result = {'text': sent, 'spo_list': triplets,
                           'bio': bio, 'selection': selection_dics}
                 t.write(json.dumps(result))
@@ -135,11 +133,32 @@ class Conll_selection_preprocessing(object):
 
     # TODO: fix bug: entity with multiple tokens
     @staticmethod
-    def _process_sent(sent: List[str], dic) -> Set[str]:
+    def _find_entity(pos, text, sequence_tags):
+        entity = []
+
+        if sequence_tags[pos] in ('B', 'O'):
+            entity.append(text[pos])
+        else:
+            temp_entity = []
+            while sequence_tags[pos] == 'I':
+                temp_entity.append(text[pos])
+                pos -= 1
+                if pos < 0:
+                    break
+                if sequence_tags[pos] == 'B':
+                    temp_entity.append(text[pos])
+                    break
+            entity = list(reversed(temp_entity))
+        return entity
+
+    def _process_sent(self, sent: List[str], dic: List[Dict[str, int]], bio: List[str]) -> Set[str]:
+        id2relation = {v: k for k, v in self.relation_vocab_dict.items()}
         result = []
-        for k, v in dic.items():
-            s, p = k.split('~')
-            o = sent[v]
+        for triplets_id in dic:
+            s, p, o = triplets_id['subject'], triplets_id['predicate'], triplets_id['object']
+            p = id2relation[p]
+            s = self._find_entity(s, sent, bio)
+            o = self._find_entity(o, sent, bio)
 
             result.append({'subject': s, 'predicate': p, 'object': o})
         return result

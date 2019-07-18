@@ -26,10 +26,16 @@ class F1_triplet(object):
                  gold_labels: List[List[Dict[str, str]]]):
 
         for g, p in zip(gold_labels, predictions):
-            g_set = set('_'.join((gg['object'], gg['predicate'],
-                                  gg['subject'])) for gg in g)
-            p_set = set('_'.join((pp['object'], pp['predicate'],
-                                  pp['subject'])) for pp in p)
+            try:
+                g_set = set('_'.join((gg['object'], gg['predicate'],
+                                    gg['subject'])) for gg in g)
+                p_set = set('_'.join((pp['object'], pp['predicate'],
+                                    pp['subject'])) for pp in p)
+            except:
+                g_set = set('_'.join(('__'.join(gg['object']), gg['predicate'],
+                                    '__'.join(gg['subject']))) for gg in g)
+                p_set = set('_'.join(('__'.join(pp['object']), pp['predicate'],
+                                    '__'.join(pp['subject']))) for pp in p)
             self.A += len(g_set & p_set)
             self.B += len(p_set)
             self.C += len(g_set)
