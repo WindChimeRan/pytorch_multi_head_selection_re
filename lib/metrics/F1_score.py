@@ -32,10 +32,10 @@ class F1_triplet(object):
                 p_set = set('_'.join((pp['object'], pp['predicate'],
                                     pp['subject'])) for pp in p)
             except:
-                g_set = set('_'.join(('__'.join(gg['object']), gg['predicate'],
-                                    '__'.join(gg['subject']))) for gg in g)
-                p_set = set('_'.join(('__'.join(pp['object']), pp['predicate'],
-                                    '__'.join(pp['subject']))) for pp in p)
+                g_set = set('_'.join((''.join(gg['object']), gg['predicate'],
+                                    ''.join(gg['subject']))) for gg in g)
+                p_set = set('_'.join((''.join(pp['object']), pp['predicate'],
+                                    ''.join(pp['subject']))) for pp in p)
             self.A += len(g_set & p_set)
             self.B += len(p_set)
             self.C += len(g_set)

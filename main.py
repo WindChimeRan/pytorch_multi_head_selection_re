@@ -96,7 +96,7 @@ class Runner(object):
 
     def evaluation(self):
         dev_set = Selection_Dataset(self.hyper, self.hyper.dev)
-        loader = Selection_loader(dev_set, batch_size=400, pin_memory=True)
+        loader = Selection_loader(dev_set, batch_size=self.hyper.eval_batch, pin_memory=True)
         self.metrics.reset()
         self.model.eval()
 
@@ -115,7 +115,7 @@ class Runner(object):
 
     def train(self):
         train_set = Selection_Dataset(self.hyper, self.hyper.train)
-        loader = Selection_loader(train_set, batch_size=100, pin_memory=True)
+        loader = Selection_loader(train_set, batch_size=self.hyper.train_batch, pin_memory=True)
 
         for epoch in range(self.hyper.epoch_num):
             self.model.train()

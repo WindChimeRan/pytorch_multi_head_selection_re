@@ -18,7 +18,10 @@ Chinese Information Extraction Competition [link](http://lic2019.ccf.org.cn/kg)
 
 ## CoNLL04
 
-On going
+We use the data processed by official version.
+
+**already in ./raw_data/CoNLL04/**
+
 
 # Run
 ```shell
@@ -29,12 +32,26 @@ python main.py --mode evaluation --exp_name chinese_selection_re
 ```
 # Result
 
+## Chinese
 Training speed: 10min/epoch
 
 |  | precision | recall | f1 |
 | ------ | ------ | ------ | ------ |
-|Ours (dev) | 0.7443 | 0.6960 | 0.7194 |
+| Ours (dev) | 0.7443 | 0.6960 | 0.7194 |
 | Winner (test) | 0.8975 |0.8886 | 0.893 |
+
+## CoNLL04
+
+|  | precision | recall | f1 |
+| ------ | ------ | ------ | ------ |
+| Ours (test) | 0.6531 | 0.3153 | 0.4252 |
+| Official (test) | 0.6375 |0.6043 | 0.6204 |
+
+The official score is suspicious. They seems use less strict evaluation.
+
+We use the strictest setting: a triplet is correct only if the relation and all the tokens of head and tail are correct. 
+
+
 
 
 # PRs welcome
