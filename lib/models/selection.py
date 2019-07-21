@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple, Set, Optional
 from functools import partial
 
 from torchcrf import CRF
-
+from pytorch_transformers import *
 
 class MultiHeadSelection(nn.Module):
     def __init__(self, hyper) -> None:
