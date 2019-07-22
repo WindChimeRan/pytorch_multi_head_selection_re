@@ -1,7 +1,7 @@
 {
-    "dataset": "conll",
+    "dataset": "conll_bert",
     "model": "multi_head_selection",
-    "data_root": "data/conll/multi_head_selection",
+    "data_root": "data/conll_bert/multi_head_selection",
     "raw_data_root": "raw_data/CoNLL04",
     "train": "train.txt",
     "dev": "test.txt",
