@@ -63,16 +63,25 @@ class Conll_bert_preprocessing(object):
         def align_pos(text, bert_tokens):
             i = 0
             align_list = []
+            cur_text_tok = text[i].lower()
             for tok in bert_tokens:
                 if tok.startswith('##'):
                     tok = tok[2:]
-                if tok in text[i].lower():
-                    align_list.append(i)
-                else:
-                    print('error')
-                if text[i].lower().endswith(tok):
+
+                # cur_text_tok is the full token
+                # tok is just piece
+
+                align_list.append(i) 
+                if cur_text_tok == tok and i < len(text) - 1:
                     i += 1
+                    cur_text_tok = text[i].lower()
+                else:
+                    cur_text_tok = cur_text_tok[len(tok):]
+
+
             assert len(text) - 1 == max(align_list)
+            
+
             return align_list
 
         def align_bio(pos, bio):
@@ -117,19 +126,9 @@ class Conll_bert_preprocessing(object):
         aligned_tokens_pos = align_pos(text, bert_tokens)
 
         aligned_bio = align_bio(aligned_tokens_pos, bio)
-        # print(text)
-        # print(bert_tokens)
-        # print(aligned_tokens_pos)
-        # print(bio)
-        # print(aligned_bio)
+
         assert len(text) - 1 == max(aligned_tokens_pos)
-        try:
-            assert len(aligned_tokens_pos) == len(bert_tokens)
-        except:
-            print(bert_tokens)
-            print(text)
-            print(aligned_tokens_pos)
-            exit()
+        assert len(aligned_tokens_pos) == len(bert_tokens)
         assert len(aligned_bio) == len(bert_tokens)
 
         spolist2new(spo_list, aligned_tokens_pos)
@@ -137,6 +136,8 @@ class Conll_bert_preprocessing(object):
 
         result = {'text': bert_tokens, 'spo_list': spo_list,
                   'bio': aligned_bio, 'selection': selection}
+                  
+        return result
 
     def _gen_one_data(self, dataset):
         sent = []
@@ -184,6 +185,7 @@ class Conll_bert_preprocessing(object):
                 triplets = self._process_sent(sent, selection_dics, bio)
                 result = {'text': sent, 'spo_list': triplets,
                           'bio': bio, 'selection': selection_dics}
+                result = self.prepare_bert(result)
                 t.write(json.dumps(result))
 
     def gen_all_data(self):
