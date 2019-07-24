@@ -48,6 +48,10 @@ class MultiHeadSelection(nn.Module):
                                    hyper.hidden_size,
                                    bidirectional=True,
                                    batch_first=True)
+        elif hyper.cell_name == 'bert':
+            self.encoder = None
+            # TODO
+            raise NotImplementedError
         else:
             raise ValueError('cell name should be gru/lstm!')
 

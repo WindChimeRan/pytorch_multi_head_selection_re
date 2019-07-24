@@ -4,6 +4,8 @@
 
 [official tensorflow version](https://github.com/bekou/multihead_joint_entity_relation_extraction)
 
+This model is extreamly useful for real-world RE usage. I originally reimplemented for a competition (Chinese IE). I will add CoNLL04 dataset and BERT model.
+
 # Requirement
 
 * python 3.7
@@ -28,8 +30,14 @@ We use the data processed by official version.
 python main.py --mode preprocessing --exp_name chinese_selection_re
 python main.py --mode train --exp_name chinese_selection_re 
 python main.py --mode evaluation --exp_name chinese_selection_re
-
 ```
+
+If you want to try other experiments:
+
+set **exp_name** as **conll_selection_re** or **conll_bert_re**
+
+
+
 # Result
 
 ## Chinese
@@ -47,19 +55,18 @@ Training speed: 10min/epoch
 | Ours (test) | 0.6531 | 0.3153 | 0.4252 |
 | Official (test) | 0.6375 |0.6043 | 0.6204 |
 
-The official score is suspicious. They seems use less strict evaluation.
-
 We use the strictest setting: a triplet is correct only if the relation and all the tokens of head and tail are correct. 
 
 
+# Details
 
+The model was originally used for Chinese IE, thus, it's a bit different from the official paper:
 
-# PRs welcome
+They use pretrained char-word embedding while we use word embedding initialized randomly; they use 3-layer LSTM while we use 1-layer LSTM.
 
-Current status
-* No hyperparameter tuning
-* No pretrained embedding
-* No bert embedding
-* No word-char embedding
+# TODO
 
-Need more datasets and compared models.
+* Tune the hyperparameters for CoNLL04
+* Replace LSTM with BERT for CoNLL04
+
+Currently, the **exp_name=conll_bert_re** are still under development and not runable.
