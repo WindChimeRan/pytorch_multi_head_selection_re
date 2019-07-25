@@ -54,7 +54,7 @@ Test set:
 |  | precision | recall | f1 |
 | ------ | ------ | ------ | ------ |
 | Ours (LSTM) | 0.6531 | 0.3153 | 0.4252 |
-| Ours (BERT-freeze) | 0.4764 | 0.4483 | 0.4619 |
+| Ours (BERT-freeze) | 0.5233 | 0.4975 | 0.5101 |
 | Official | 0.6375 |0.6043 | 0.6204 |
 
 We use the strictest setting: a triplet is correct only if the relation and all the tokens of head and tail are correct. 

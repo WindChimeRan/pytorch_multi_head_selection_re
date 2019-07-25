@@ -51,7 +51,12 @@ class MultiHeadSelection(nn.Module):
                                    batch_first=True)
         elif hyper.cell_name == 'bert':
             self.encoder = BertModel.from_pretrained('bert-base-uncased')
-            # self.encoder.
+            for name, param in self.encoder.named_parameters():
+                if '11' in name:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+                    # print(name, param.size())
         else:
             raise ValueError('cell name should be gru/lstm/bert!')
 
@@ -141,8 +146,9 @@ class MultiHeadSelection(nn.Module):
                                                    self.hyper.hidden_size,
                                                    dim=2))
         elif self.hyper.cell_name == 'bert':
-            with torch.no_grad():
-                o = self.encoder(tokens, attention_mask=mask)[0]  # last hidden of BERT
+            # with torch.no_grad():
+            o = self.encoder(tokens, attention_mask=mask)[0]  # last hidden of BERT
+            # o = self.activation(o)
             # torch.Size([16, 310, 768])
             o = self.bert2hidden(o)
         else:
