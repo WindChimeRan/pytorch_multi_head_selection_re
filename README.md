@@ -49,11 +49,13 @@ Training speed: 10min/epoch
 | Winner (test) | 0.8975 |0.8886 | 0.893 |
 
 ## CoNLL04
+Test set:
 
 |  | precision | recall | f1 |
 | ------ | ------ | ------ | ------ |
-| Ours (test) | 0.6531 | 0.3153 | 0.4252 |
-| Official (test) | 0.6375 |0.6043 | 0.6204 |
+| Ours (LSTM) | 0.6531 | 0.3153 | 0.4252 |
+| Ours (BERT-freeze) | 0.4764 | 0.4483 | 0.4619 |
+| Official | 0.6375 |0.6043 | 0.6204 |
 
 We use the strictest setting: a triplet is correct only if the relation and all the tokens of head and tail are correct. 
 
@@ -67,6 +69,3 @@ They use pretrained char-word embedding while we use word embedding initialized 
 # TODO
 
 * Tune the hyperparameters for CoNLL04
-* Replace LSTM with BERT for CoNLL04
-
-Currently, the **exp_name=conll_bert_re** are still under development and not runable.
