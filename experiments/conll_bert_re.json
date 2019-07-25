@@ -8,8 +8,8 @@
     "relation_vocab": "relation_vocab.json",
     "print_epoch": 3,
     "evaluation_epoch":27,
-    "max_text_len": 348,
-    "cell_name": "lstm",
+    "max_text_len": 250,
+    "cell_name": "bert",
     "emb_size": 300,
     "rel_emb_size": 100,
     "bio_emb_size": 50,
@@ -19,6 +19,6 @@
     "optimizer": "adam",
     "epoch_num": 150,
     "train_batch": 16,
-    "eval_batch": 32,
+    "eval_batch": 16,
     "gpu":3
 }

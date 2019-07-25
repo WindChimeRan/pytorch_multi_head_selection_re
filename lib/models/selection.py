@@ -12,6 +12,7 @@ from functools import partial
 from torchcrf import CRF
 from pytorch_transformers import *
 
+
 class MultiHeadSelection(nn.Module):
     def __init__(self, hyper) -> None:
         super(MultiHeadSelection, self).__init__()
@@ -29,11 +30,11 @@ class MultiHeadSelection(nn.Module):
 
         self.word_embeddings = nn.Embedding(num_embeddings=len(
             self.word_vocab),
-                                            embedding_dim=hyper.emb_size)
+            embedding_dim=hyper.emb_size)
 
         self.relation_emb = nn.Embedding(num_embeddings=len(
             self.relation_vocab),
-                                         embedding_dim=hyper.rel_emb_size)
+            embedding_dim=hyper.rel_emb_size)
         # bio + pad
         self.bio_emb = nn.Embedding(num_embeddings=len(self.bio_vocab),
                                     embedding_dim=hyper.bio_emb_size)
@@ -49,11 +50,10 @@ class MultiHeadSelection(nn.Module):
                                    bidirectional=True,
                                    batch_first=True)
         elif hyper.cell_name == 'bert':
-            self.encoder = None
-            # TODO
-            raise NotImplementedError
+            self.encoder = BertModel.from_pretrained('bert-base-uncased')
+            # self.encoder.
         else:
-            raise ValueError('cell name should be gru/lstm!')
+            raise ValueError('cell name should be gru/lstm/bert!')
 
         if hyper.activation.lower() == 'relu':
             self.activation = nn.ReLU()
@@ -71,6 +71,13 @@ class MultiHeadSelection(nn.Module):
         self.selection_uv = nn.Linear(2 * hyper.rel_emb_size,
                                       hyper.rel_emb_size)
         self.emission = nn.Linear(hyper.hidden_size, len(self.bio_vocab) - 1)
+
+        self.bert2hidden = nn.Linear(768, hyper.hidden_size)
+
+        if self.hyper.cell_name == 'bert':
+
+            self.bert_tokenizer = BertTokenizer.from_pretrained(
+                'bert-base-uncased')
 
         # self.accuracy = F1Selection()
 
@@ -113,15 +120,33 @@ class MultiHeadSelection(nn.Module):
         text_list = sample.text
         spo_gold = sample.spo_gold
 
-        mask = tokens != self.word_vocab['<pad>']  # batch x seq
+        if self.hyper.cell_name in ('gru', 'lstm'):
+            mask = tokens != self.word_vocab['<pad>']  # batch x seq
+            bio_mask = mask
+        elif self.hyper.cell_name in ('bert'):
+            notpad = tokens != self.bert_tokenizer.encode('[PAD]')[0]
+            notcls = tokens != self.bert_tokenizer.encode('[CLS]')[0]
+            notsep = tokens != self.bert_tokenizer.encode('[SEQ]')[0]
+            mask = notpad & notcls & notsep
+            bio_mask = notpad & notsep # fst token for crf cannot be masked
+        else:
+            raise ValueError('unexpected encoder name!')
 
-        embedded = self.word_embeddings(tokens)
-        o, h = self.encoder(embedded)
+        
+        if self.hyper.cell_name in ('lstm', 'gru'):
+            embedded = self.word_embeddings(tokens)
+            o, h = self.encoder(embedded)
 
-        o = (lambda a: sum(a) / 2)(torch.split(o,
-                                               self.hyper.hidden_size,
-                                               dim=2))
-
+            o = (lambda a: sum(a) / 2)(torch.split(o,
+                                                   self.hyper.hidden_size,
+                                                   dim=2))
+        elif self.hyper.cell_name == 'bert':
+            with torch.no_grad():
+                o = self.encoder(tokens, attention_mask=mask)[0]  # last hidden of BERT
+            # torch.Size([16, 310, 768])
+            o = self.bert2hidden(o)
+        else:
+            raise ValueError('unexpected encoder name!')
         emi = self.emission(o)
 
         output = {}
@@ -129,9 +154,9 @@ class MultiHeadSelection(nn.Module):
         crf_loss = 0
 
         if is_train:
-            crf_loss = -self.tagger(emi, bio_gold, mask=mask, reduction='mean')
+            crf_loss = -self.tagger(emi, bio_gold, mask=bio_mask, reduction='mean')
         else:
-            decoded_tag = self.tagger.decode(emissions=emi, mask=mask)
+            decoded_tag = self.tagger.decode(emissions=emi, mask=bio_mask)
             temp_tag = copy.deepcopy(decoded_tag)
             for line in temp_tag:
                 line.extend([self.bio_vocab['<pad>']] *
@@ -172,7 +197,6 @@ class MultiHeadSelection(nn.Module):
     def selection_decode(self, text_list, sequence_tags,
                          selection_tags: torch.Tensor
                          ) -> List[List[Dict[str, str]]]:
-        # TODO: tokenizer
         reversed_relation_vocab = {
             v: k
             for k, v in self.relation_vocab.items()

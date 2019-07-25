@@ -156,7 +156,7 @@ class Conll_bert_preprocessing(object):
                         result = {'text': sent, 'spo_list': triplets,
                                   'bio': bio, 'selection': selection_dics}
                         result = self.prepare_bert(result)
-                        if len(sent) <= self.hyper.max_text_len:
+                        if len(result['text']) <= self.hyper.max_text_len - 2: # for [CLS] and [SEP]
                             t.write(json.dumps(result))
                             t.write('\n')
                     sent = []

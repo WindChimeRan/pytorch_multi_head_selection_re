@@ -11,6 +11,8 @@ from torch.nn.utils.rnn import pad_sequence
 from functools import partial
 from typing import Dict, List, Tuple, Set, Optional
 
+from pytorch_transformers import *
+
 
 class Selection_Dataset(Dataset):
     def __init__(self, hyper, dataset):
@@ -29,6 +31,10 @@ class Selection_Dataset(Dataset):
         self.bio_list = []
         self.spo_list = []
 
+        # for bert only
+        self.bert_tokenizer = BertTokenizer.from_pretrained(
+            'bert-base-uncased')
+
         for line in open(os.path.join(self.data_root, dataset), 'r'):
             line = line.strip("\n")
             instance = json.loads(line)
@@ -43,8 +49,12 @@ class Selection_Dataset(Dataset):
         text = self.text_list[index]
         bio = self.bio_list[index]
         spo = self.spo_list[index]
-
-        tokens_id = self.text2tensor(text)
+        if self.hyper.cell_name == 'bert':
+            text, bio, selection = self.pad_bert(text, bio, selection)
+            tokens_id = torch.tensor(
+                self.bert_tokenizer.convert_tokens_to_ids(text))
+        else:
+            tokens_id = self.text2tensor(text)
         bio_id = self.bio2tensor(bio)
         selection_id = self.selection2tensor(text, selection)
 
@@ -53,18 +63,30 @@ class Selection_Dataset(Dataset):
     def __len__(self):
         return len(self.text_list)
 
+    def pad_bert(self, text: List[str], bio: List[str], selection: List[Dict[str, int]]) -> Tuple[List[str], List[str], Dict[str, int]]:
+        # for [CLS] and [SEP]
+        text = ['[CLS]'] + text + ['[SEP]']
+        bio = ['O'] + bio
+        selection = [{'subject': triplet['subject'] + 1, 'object': triplet['object'] +
+                      1, 'predicate': triplet['predicate']} for triplet in selection]
+        assert len(text) <= self.hyper.max_text_len
+        text = text + ['[PAD]'] * (self.hyper.max_text_len - len(text))
+        return text, bio, selection
+
     def text2tensor(self, text: List[str]) -> torch.tensor:
         # TODO: tokenizer
         oov = self.word_vocab['oov']
         padded_list = list(map(lambda x: self.word_vocab.get(x, oov), text))
-        padded_list.extend([self.word_vocab['<pad>']] * (self.hyper.max_text_len - len(text)))
+        padded_list.extend([self.word_vocab['<pad>']] *
+                           (self.hyper.max_text_len - len(text)))
         return torch.tensor(padded_list)
 
     def bio2tensor(self, bio):
         # here we pad bio with "O". Then, in our model, we will mask this "O" padding.
         # in multi-head selection, we will use "<pad>" token embedding instead.
         padded_list = list(map(lambda x: self.bio_vocab[x], bio))
-        padded_list.extend([self.bio_vocab['O']] * (self.hyper.max_text_len - len(bio)))
+        padded_list.extend([self.bio_vocab['O']] *
+                           (self.hyper.max_text_len - len(bio)))
         return torch.tensor(padded_list)
 
     def selection2tensor(self, text, selection):
