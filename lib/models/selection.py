@@ -133,11 +133,10 @@ class MultiHeadSelection(nn.Module):
             notcls = tokens != self.bert_tokenizer.encode('[CLS]')[0]
             notsep = tokens != self.bert_tokenizer.encode('[SEQ]')[0]
             mask = notpad & notcls & notsep
-            bio_mask = notpad & notsep # fst token for crf cannot be masked
+            bio_mask = notpad & notsep  # fst token for crf cannot be masked
         else:
             raise ValueError('unexpected encoder name!')
 
-        
         if self.hyper.cell_name in ('lstm', 'gru'):
             embedded = self.word_embeddings(tokens)
             o, h = self.encoder(embedded)
@@ -147,7 +146,8 @@ class MultiHeadSelection(nn.Module):
                                                    dim=2))
         elif self.hyper.cell_name == 'bert':
             # with torch.no_grad():
-            o = self.encoder(tokens, attention_mask=mask)[0]  # last hidden of BERT
+            o = self.encoder(tokens, attention_mask=mask)[
+                0]  # last hidden of BERT
             # o = self.activation(o)
             # torch.Size([16, 310, 768])
             o = self.bert2hidden(o)
@@ -160,7 +160,8 @@ class MultiHeadSelection(nn.Module):
         crf_loss = 0
 
         if is_train:
-            crf_loss = -self.tagger(emi, bio_gold, mask=bio_mask, reduction='mean')
+            crf_loss = -self.tagger(emi, bio_gold,
+                                    mask=bio_mask, reduction='mean')
         else:
             decoded_tag = self.tagger.decode(emissions=emi, mask=bio_mask)
             temp_tag = copy.deepcopy(decoded_tag)
@@ -174,13 +175,25 @@ class MultiHeadSelection(nn.Module):
         o = torch.cat((o, tag_emb), dim=2)
 
         # forward multi head selection
-        u = self.activation(self.selection_u(o)).unsqueeze(1)
-        v = self.activation(self.selection_v(o)).unsqueeze(2)
-        u = u + torch.zeros_like(v)
-        v = v + torch.zeros_like(u)
+        B, L, H = o.size()
+        u = self.activation(self.selection_u(o)).unsqueeze(1).expand(B, L, L, -1)
+        v = self.activation(self.selection_v(o)).unsqueeze(2).expand(B, L, L, -1)
         uv = self.activation(self.selection_uv(torch.cat((u, v), dim=-1)))
+
+        # correct one
         selection_logits = torch.einsum('bijh,rh->birj', uv,
                                         self.relation_emb.weight)
+
+        # use loop instead of matrix
+        # selection_logits_list = []
+        # for i in range(self.hyper.max_text_len):
+        #     uvi = uv[:, i, :, :]
+        #     sigmoid_input = uvi
+        #     selection_logits_i = torch.einsum('bjh,rh->brj', sigmoid_input,
+        #                                         self.relation_emb.weight).unsqueeze(1)
+        #     selection_logits_list.append(selection_logits_i)
+        # selection_logits = torch.cat(selection_logits_list,dim=1)
+
 
         if not is_train:
             output['selection_triplets'] = self.inference(
