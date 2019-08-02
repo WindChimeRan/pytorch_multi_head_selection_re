@@ -27,6 +27,7 @@ class MultiHeadSelection(nn.Module):
             open(os.path.join(self.data_root, 'relation_vocab.json'), 'r'))
         self.bio_vocab = json.load(
             open(os.path.join(self.data_root, 'bio_vocab.json'), 'r'))
+        self.id2bio = {v: k for k, v in self.bio_vocab.items()}
 
         self.word_embeddings = nn.Embedding(num_embeddings=len(
             self.word_vocab),
@@ -50,6 +51,10 @@ class MultiHeadSelection(nn.Module):
                                    bidirectional=True,
                                    batch_first=True)
         elif hyper.cell_name == 'bert':
+            self.post_lstm = nn.LSTM(hyper.emb_size,
+                                   hyper.hidden_size,
+                                   bidirectional=True,
+                                   batch_first=True)
             self.encoder = BertModel.from_pretrained('bert-base-uncased')
             for name, param in self.encoder.named_parameters():
                 if '11' in name:
@@ -78,6 +83,8 @@ class MultiHeadSelection(nn.Module):
         self.emission = nn.Linear(hyper.hidden_size, len(self.bio_vocab) - 1)
 
         self.bert2hidden = nn.Linear(768, hyper.hidden_size)
+        # for bert_lstm
+        # self.bert2hidden = nn.Linear(768, hyper.emb_size)
 
         if self.hyper.cell_name == 'bert':
 
@@ -125,6 +132,8 @@ class MultiHeadSelection(nn.Module):
         text_list = sample.text
         spo_gold = sample.spo_gold
 
+        bio_text = sample.bio
+
         if self.hyper.cell_name in ('gru', 'lstm'):
             mask = tokens != self.word_vocab['<pad>']  # batch x seq
             bio_mask = mask
@@ -151,6 +160,13 @@ class MultiHeadSelection(nn.Module):
             # o = self.activation(o)
             # torch.Size([16, 310, 768])
             o = self.bert2hidden(o)
+
+            # below for bert+lstm
+            # o, h = self.post_lstm(o)
+
+            # o = (lambda a: sum(a) / 2)(torch.split(o,
+            #                                        self.hyper.hidden_size,
+            #                                        dim=2))
         else:
             raise ValueError('unexpected encoder name!')
         emi = self.emission(o)
@@ -164,6 +180,10 @@ class MultiHeadSelection(nn.Module):
                                     mask=bio_mask, reduction='mean')
         else:
             decoded_tag = self.tagger.decode(emissions=emi, mask=bio_mask)
+
+            output['decoded_tag'] = [list(map(lambda x : self.id2bio[x], tags)) for tags in decoded_tag]
+            output['gold_tags'] = bio_text
+
             temp_tag = copy.deepcopy(decoded_tag)
             for line in temp_tag:
                 line.extend([self.bio_vocab['<pad>']] *

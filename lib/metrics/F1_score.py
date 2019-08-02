@@ -1,7 +1,9 @@
 from typing import Dict, List, Tuple, Set, Optional
+from abc import ABC, abstractmethod
+from overrides import overrides
 
 
-class F1_triplet(object):
+class F1_abc(object):
     def __init__(self):
         self.A = 1e-10
         self.B = 1e-10
@@ -22,6 +24,14 @@ class F1_triplet(object):
 
         return result
 
+    def __call__(self, predictions,
+                 gold_labels):
+        raise NotImplementedError
+
+
+class F1_triplet(F1_abc):
+
+    @overrides
     def __call__(self, predictions: List[List[Dict[str, str]]],
                  gold_labels: List[List[Dict[str, str]]]):
 
@@ -39,4 +49,19 @@ class F1_triplet(object):
             self.A += len(g_set & p_set)
             self.B += len(p_set)
             self.C += len(g_set)
-            
+
+
+class F1_ner(F1_abc):
+
+    @overrides
+    def __call__(self, predictions: List[List[str]], gold_labels: List[List[str]]):
+        for g, p in zip(gold_labels, predictions):
+
+            inter = sum(tok_g == tok_p and tok_g in ('B', 'I')
+                        for tok_g, tok_p in zip(g, p))
+            bi_g = sum(tok_g in ('B', 'I') for tok_g in g)
+            bi_p = sum(tok_p in ('B', 'I') for tok_p in p)
+
+            self.A += inter
+            self.B += bi_g
+            self.C += bi_p

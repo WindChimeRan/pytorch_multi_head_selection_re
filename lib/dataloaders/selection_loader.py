@@ -66,7 +66,7 @@ class Selection_Dataset(Dataset):
     def pad_bert(self, text: List[str], bio: List[str], selection: List[Dict[str, int]]) -> Tuple[List[str], List[str], Dict[str, int]]:
         # for [CLS] and [SEP]
         text = ['[CLS]'] + text + ['[SEP]']
-        bio = ['O'] + bio
+        bio = ['O'] + bio + ['O']
         selection = [{'subject': triplet['subject'] + 1, 'object': triplet['object'] +
                       1, 'predicate': triplet['predicate']} for triplet in selection]
         assert len(text) <= self.hyper.max_text_len

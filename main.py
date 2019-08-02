@@ -11,12 +11,14 @@ from prefetch_generator import BackgroundGenerator
 from tqdm import tqdm
 
 from torch.optim import Adam, SGD
+from pytorch_transformers import AdamW, WarmupLinearSchedule
 
 from lib.preprocessings import Chinese_selection_preprocessing, Conll_selection_preprocessing, Conll_bert_preprocessing
 from lib.dataloaders import Selection_Dataset, Selection_loader
-from lib.metrics import F1_triplet
+from lib.metrics import F1_triplet, F1_ner
 from lib.models import MultiHeadSelection
 from lib.config import Hyper
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name',
@@ -42,14 +44,16 @@ class Runner(object):
 
         self.gpu = self.hyper.gpu
         self.preprocessor = None
-        self.metrics = F1_triplet()
+        self.triplet_metrics = F1_triplet()
+        self.ner_metrics = F1_ner()
         self.optimizer = None
         self.model = None
 
     def _optimizer(self, name, model):
         m = {
             'adam': Adam(model.parameters()),
-            'sgd': SGD(model.parameters(), lr=0.5)
+            'sgd': SGD(model.parameters(), lr=0.5),
+            'adamw': AdamW(model.parameters())
         }
         return m[name]
 
@@ -99,7 +103,7 @@ class Runner(object):
     def evaluation(self):
         dev_set = Selection_Dataset(self.hyper, self.hyper.dev)
         loader = Selection_loader(dev_set, batch_size=self.hyper.eval_batch, pin_memory=True)
-        self.metrics.reset()
+        self.triplet_metrics.reset()
         self.model.eval()
 
         pbar = tqdm(enumerate(BackgroundGenerator(loader)), total=len(loader))
@@ -107,13 +111,18 @@ class Runner(object):
         with torch.no_grad():
             for batch_ndx, sample in pbar:
                 output = self.model(sample, is_train=False)
-                self.metrics(output['selection_triplets'], output['spo_gold'])
+                self.triplet_metrics(output['selection_triplets'], output['spo_gold'])
+                self.ner_metrics(output['gold_tags'], output['decoded_tag'])
 
-            result = self.metrics.get_metric()
-            print(', '.join([
-                "%s: %.4f" % (name, value)
-                for name, value in result.items() if not name.startswith("_")
-            ]) + " ||")
+            triplet_result = self.triplet_metrics.get_metric()
+            ner_result = self.ner_metrics.get_metric()
+            print('Triplets-> ' +  ', '.join([
+                "%s: %.4f" % (name[0], value)
+                for name, value in triplet_result.items() if not name.startswith("_")
+            ]) + ' ||' + 'NER->' + ', '.join([
+                "%s: %.4f" % (name[0], value)
+                for name, value in ner_result.items() if not name.startswith("_")
+            ]))
 
     def train(self):
         train_set = Selection_Dataset(self.hyper, self.hyper.train)
