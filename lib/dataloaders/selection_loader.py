@@ -15,9 +15,10 @@ from pytorch_transformers import *
 
 
 class Selection_Dataset(Dataset):
-    def __init__(self, hyper, dataset):
+    def __init__(self, hyper, dataset, type='train|eval'):
         self.hyper = hyper
         self.data_root = hyper.data_root
+        self.type = type
 
         self.word_vocab = json.load(
             open(os.path.join(self.data_root, 'word_vocab.json'), 'r'))
@@ -30,6 +31,7 @@ class Selection_Dataset(Dataset):
         self.text_list = []
         self.bio_list = []
         self.spo_list = []
+        self.jobid_list = []
 
         # for bert only
         self.bert_tokenizer = BertTokenizer.from_pretrained(
@@ -38,17 +40,25 @@ class Selection_Dataset(Dataset):
         for line in open(os.path.join(self.data_root, dataset), 'r'):
             line = line.strip("\n")
             instance = json.loads(line)
+            self.text_list.append(instance['text'])
+            if self.type == 'predict':
+                continue
 
             self.selection_list.append(instance['selection'])
-            self.text_list.append(instance['text'])
             self.bio_list.append(instance['bio'])
             self.spo_list.append(instance['spo_list'])
+            self.jobid_list.append(instance.get('jobid', 0))
 
     def __getitem__(self, index):
-        selection = self.selection_list[index]
         text = self.text_list[index]
+        if self.type == 'predict':
+            tokens_id = self.text2tensor(text)
+            return tokens_id, len(text), text
+
+        selection = self.selection_list[index]
         bio = self.bio_list[index]
         spo = self.spo_list[index]
+        jobid = self.jobid_list[index]
         if self.hyper.cell_name == 'bert':
             text, bio, selection = self.pad_bert(text, bio, selection)
             tokens_id = torch.tensor(
@@ -58,7 +68,7 @@ class Selection_Dataset(Dataset):
         bio_id = self.bio2tensor(bio)
         selection_id = self.selection2tensor(text, selection)
 
-        return tokens_id, bio_id, selection_id, len(text), spo, text, bio
+        return tokens_id, bio_id, selection_id, len(text), spo, text, bio, jobid
 
     def __len__(self):
         return len(self.text_list)
@@ -122,6 +132,7 @@ class Batch_reader(object):
         self.spo_gold = transposed_data[4]
         self.text = transposed_data[5]
         self.bio = transposed_data[6]
+        self.jobid = transposed_data[7]
 
     def pin_memory(self):
         self.tokens_id = self.tokens_id.pin_memory()
@@ -135,3 +146,25 @@ def collate_fn(batch):
 
 
 Selection_loader = partial(DataLoader, collate_fn=collate_fn, pin_memory=True)
+
+
+# for predict ...
+class Batch_reader_predict(object):
+    def __init__(self, data):
+        transposed_data = list(zip(*data))
+        # tokens_id, len(text), text
+
+        self.tokens_id = pad_sequence(transposed_data[0], batch_first=True)
+        self.length = transposed_data[1]
+        self.text = transposed_data[2]
+
+    def pin_memory(self):
+        self.tokens_id = self.tokens_id.pin_memory()
+        return self
+
+
+def collate_fn_predict(batch):
+    return Batch_reader_predict(batch)
+
+
+Selection_loader_predict = partial(DataLoader, collate_fn=collate_fn_predict, pin_memory=True)

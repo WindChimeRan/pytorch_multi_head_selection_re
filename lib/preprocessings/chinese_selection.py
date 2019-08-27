@@ -63,13 +63,12 @@ class Chinese_selection_preprocessing(object):
                 instance = json.loads(line)
                 text = list(instance['text'])
                 cnt.update(text)
-        result = {'<pad>': 0}
-        i = 1
+        result = {'<pad>': 0, 'oov': 1}
+        i = len(result)
         for k, v in cnt.items():
             if v > min_freq:
                 result[k] = i
                 i += 1
-        result['oov'] = i
         json.dump(result, open(target, 'w'), ensure_ascii=False)
 
     def _read_line(self, line: str) -> Optional[str]:
@@ -150,6 +149,7 @@ class Chinese_selection_preprocessing(object):
             object = triplet['object']
             subject = triplet['subject']
 
+            # 使用find查询字符串获取entity的下标是存在问题的，严格讲应该按标注时的end去计算
             object_pos = text.find(object) + len(object) - 1
             relation_pos = self.relation_vocab[triplet['predicate']]
             subject_pos = text.find(subject) + len(subject) - 1
@@ -163,6 +163,9 @@ class Chinese_selection_preprocessing(object):
         return selection
 
     def spo_to_bio(self, text: str, entities: List[str]) -> List[str]:
+        """
+        该函数不支持text中存在多次entity的情况，严格讲应该记录entity的start--end
+        """
         bio = ['O'] * len(text)
         for e in entities:
             begin = text.find(e)

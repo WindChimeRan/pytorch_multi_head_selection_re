@@ -7,7 +7,8 @@
     "dev": "dev_data.json",
     "relation_vocab": "relation_vocab.json",
     "print_epoch": 3,
-    "evaluation_epoch":27,
+    "evaluation_epoch": 21,
+    "resume_model": 0,
     "max_text_len": 100,
     "cell_name": "lstm",
     "emb_size": 300,
@@ -17,8 +18,10 @@
     "threshold": 0.5,
     "activation": "tanh",
     "optimizer": "adam",
-    "epoch_num": 30,
+    "lr": 1e-3,
+    "epoch_num": 100,
     "train_batch": 100,
     "eval_batch": 400,
-    "gpu":1
+    "patient": 5,
+    "gpu": 1
 }

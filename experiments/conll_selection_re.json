@@ -8,6 +8,7 @@
     "relation_vocab": "relation_vocab.json",
     "print_epoch": 3,
     "evaluation_epoch":27,
+    "resume_model": 0,
     "max_text_len": 348,
     "cell_name": "lstm",
     "emb_size": 300,
@@ -17,8 +18,10 @@
     "threshold": 0.5,
     "activation": "tanh",
     "optimizer": "adam",
-    "epoch_num": 150,
+    "lr": 1e-3,
+    "epoch_num": 30,
     "train_batch": 16,
     "eval_batch": 32,
-    "gpu":3
+    "patient": 5,
+    "gpu": 0
 }
